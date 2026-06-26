@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AI"杠精"读书会 - 交互演示</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ===== Design System ===== */
+    :root {
+      --bg-body: #eef2f7;
+      --bg-app: #ffffff;
+      --bg-card: #ffffff;
+      --bg-input: #f3f4f6;
+      --bg-hover: #f9fafb;
+      --accent-primary: #ff7a45;
+      --accent-primary-light: #ff9e7a;
+      --accent-secondary: #36cfc9;
+      --accent-secondary-light: #6ee7e3;
+      --accent-tertiary: #9254de;
+      --accent-tertiary-light: #b794f6;
+      --accent-warm: #ffc53d;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --border-color: #e5e7eb;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+      --radius-sm: 12px;
+      --radius-md: 16px;
+      --radius-lg: 20px;
+      --radius-xl: 24px;
+      --radius-pill: 100px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* ===== App Shell ===== */
+    .app-shell {
+      width: 100%;
+      max-width: 430px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--bg-app);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    @media (min-width: 768px) {
+      .app-shell {
+        min-height: 85vh;
+        max-height: 900px;
+        margin: 7vh auto;
+        border-radius: 40px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.15), 0 0 0 8px #fff;
+        overflow: hidden;
+      }
+    }
+
+    /* ===== Header ===== */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 56px;
+    }
+
+    .app-header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      flex: 1;
+      text-align: center;
+    }
+
+    .header-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-input);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .header-btn:active { transform: scale(0.92); }
+    .header-btn:hover { background: var(--border-color); }
+
+    .header-btn.hidden { visibility: hidden; pointer-events: none; }
+
+    /* ===== Main Content ===== */
+    .app-main {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 90px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .view { padding: 16px 20px; animation: viewIn 0.25s ease-out; flex-shrink: 0; }
+    .view.chat-view { padding: 0; flex: 1; display: flex; flex-direction: column; }
+
+    @keyframes viewIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ===== Bottom Nav ===== */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      max-width: 430px;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-around;
+      padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
+      z-index: 100;
+    }
+
+    @media (min-width: 768px) {
+      .bottom-nav {
+        position: absolute;
+        border-bottom-left-radius: 32px;
+        border-bottom-right-radius: 32px;
+      }
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 12px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .nav-item .nav-icon { font-size: 1.4rem; transition: transform 0.2s; }
+    .nav-item.active { color: var(--accent-primary); }
+    .nav-item.active .nav-icon { transform: translateY(-2px); }
+
+    .nav-badge {
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      width: 8px;
+      height: 8px;
+      background: var(--accent-primary);
+      border-radius: 50%;
+      border: 2px solid white;
+    }
+
+    /* ===== Cards ===== */
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-color);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .card:active { transform: scale(0.98); }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .card-text {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ===== Tags & Badges ===== */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--bg-input);
+      color: var(--text-secondary);
+      margin-right: 6px;
+      margin-bottom: 4px;
+    }
+
+    .tag.primary { background: rgba(255,122,69,0.1); color: var(--accent-primary); }
+    .tag.secondary { background: rgba(54,207,201,0.1); color: var(--accent-secondary); }
+    .tag.tertiary { background: rgba(146,84,222,0.1); color: var(--accent-tertiary); }
+
+    .mastery-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      color: white;
+    }
+
+    /* ===== Buttons ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 24px;
+      border-radius: var(--radius-pill);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-light));
+      color: white;
+      box-shadow: 0 4px 12px rgba(255,122,69,0.3);
+    }
+
+    .btn-primary:hover { box-shadow: 0 6px 16px rgba(255,122,69,0.4); }
+
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover { background: var(--border-color); }
+
+    .btn-block { width: 100%; }
+
+    .btn-sm { padding: 8px 16px; font-size: 0.8rem; }
+
+    /* ===== Forms ===== */
+    .form-group { margin-bottom: 16px; }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-input);
+      font-family: inherit;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(255,122,69,0.1);
+    }
+
+    .form-textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    /* ===== Progress ===== */
+    .progress-track {
+      height: 10px;
+      background: var(--bg-input);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-tertiary));
+      transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+      width: 0;
+    }
+
+    /* ===== Empty State ===== */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .empty-icon { font-size: 4rem; margin-bottom: 16px; }
+    .empty-state h3 { font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 8px; }
+    .empty-state p { font-size: 0.85rem; }
+
+    /* ===== Toast (Top Notification Style) ===== */
+    .toast-container {
+      position: fixed;
+      top: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 398px;
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85rem;
+      animation: toastDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: all;
+      border: 1px solid var(--border-color);
+    }
+
+    .toast.hiding { animation: toastUp 0.3s ease-in forwards; }
+
+    @keyframes toastDown {
+      from { opacity: 0; transform: translateY(-120%); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes toastUp {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-120%); }
+    }
+
+    .toast-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .toast-body { flex: 1; min-width: 0; }
+    .toast-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 2px; }
+    .toast-msg { color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .toast-action {
+      margin-left: 8px;
+      padding: 6px 14px;
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-pill);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ===== Mic Overlay ===== */
+    .mic-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 24px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .mic-overlay.active { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .mic-wave {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      position: relative;
+    }
+
+    .mic-wave::before,
+    .mic-wave::after {
+      content: '';
+      position: absolute;
+      inset: -10px;
+      border-radius: 50%;
+      border: 2px solid var(--accent-primary);
+      animation: micPulse 2s ease-out infinite;
+    }
+
+    .mic-wave::after { animation-delay: 0.5s; }
+
+    @keyframes micPulse {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .mic-text {
+      color: white;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .mic-cancel {
+      padding: 10px 24px;
+      background: rgba(255,255,255,0.15);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: var(--radius-pill);
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    /* ===== Segmented Control ===== */
+    .segment-control {
+      display: flex;
+      background: var(--bg-input);
+      border-radius: var(--radius-pill);
+      padding: 4px;
+    }
+
+    .segment-item {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      border-radius: var(--radius-pill);
+      font-size: 0.85rem;
+      font-weight: 500;
+      border: none;
+      background: none;
+      font-family: inherit;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .segment-item.active {
+      background: white;
+      color: var(--accent-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ===== Toggle Switch ===== */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .toggle-row:last-child { border-bottom: none; }
+
+    .toggle-label { font-size: 0.9rem; font-weight: 500; }
+    .toggle-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+
+    .toggle-switch {
+      width: 48px;
+      height: 28px;
+      border-radius: 100px;
+      background: var(--border-color);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch.active { background: var(--accent-primary); }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch.active::after { transform: translateX(20px); }
+
+    /* ===== Spinner ===== */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== Reduced Motion ===== */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* ===== Visually Hidden ===== */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ===== Lockscreen ===== */
+    .lockscreen {
+      position: absolute;
+      inset: 0;
+      z-index: 500;
+      background: linear-gradient(160deg, #1a1f3a 0%, #2d1f4f 40%, #4a1f4a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 24px 40px;
+      color: white;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .lockscreen.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.05);
+    }
+
+    .lockscreen-time {
+      font-size: 4rem;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .lockscreen-date {
+      font-size: 1rem;
+      opacity: 0.7;
+      margin-bottom: 40px;
+    }
+
+    .lockscreen-notifications {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .lockscreen-notification {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      animation: notifSlide 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .lockscreen-notification:hover { background: rgba(255,255,255,0.18); }
+
+    @keyframes notifSlide {
+      from { opacity: 0; transform: translateX(-30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .lockscreen-notif-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .lockscreen-notif-body { flex: 1; min-width: 0; }
+    .lockscreen-notif-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .lockscreen-notif-time { font-size: 0.7rem; opacity: 0.5; font-weight: 400; }
+    .lockscreen-notif-msg {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .lockscreen-footer {
+      width: 100%;
+      text-align: center;
+      padding-top: 20px;
+    }
+
+    .lockscreen-enter-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 36px;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      border-radius: var(--radius-pill);
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s;
+    }
+
+    .lockscreen-enter-btn:hover { background: rgba(255,255,255,0.25); }
+    .lockscreen-enter-btn:active { transform: scale(0.96); }
+
+    .lockscreen-hint {
+      font-size: 0.75rem;
+      opacity: 0.4;
+      margin-top: 12px;
+    }
+
+    /* Chat aggressiveness toggle */
+    .chat-agg-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px;
+      background: var(--bg-input);
+      border-radius: 100px;
+    }
+
+    .chat-agg-btn {
+      padding: 4px 10px;
+      border-radius: 100px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chat-agg-btn.active {
+      background: white;
+      color: var(--accent-primary);
+      box-shadow: var(--shadow-sm);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Lockscreen Overlay -->
+    <div class="lockscreen" id="lockscreen">
+      <div class="lockscreen-time" id="lockscreen-time">12:00</div>
+      <div class="lockscreen-date" id="lockscreen-date">1月1日 星期一</div>
+      <div class="lockscreen-notifications" id="lockscreen-notifications"></div>
+      <div class="lockscreen-footer">
+        <button class="lockscreen-enter-btn" id="lockscreen-enter">📱 进入应用</button>
+        <div class="lockscreen-hint">每5秒收到新的辩论邀请</div>
+      </div>
+    </div>
+
+    <header class="app-header">
+      <button class="header-btn hidden" id="header-back" aria-label="返回">←</button>
+      <h1 id="header-title">我的收藏</h1>
+      <button class="header-btn hidden" id="header-action" aria-label="操作">⋮</button>
+    </header>
+
+    <main class="app-main" id="router-view"></main>
+
+    <nav class="bottom-nav" role="tablist" aria-label="主导航">
+      <button class="nav-item active" role="tab" aria-selected="true" data-view="bookmarks" aria-label="收藏夹">
+        <span class="nav-icon">📚</span>
+        <span>收藏夹</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-view="add" aria-label="添加">
+        <span class="nav-icon">➕</span>
+        <span>添加</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-view="knowledge" aria-label="知识库">
+        <span class="nav-icon">🧠</span>
+        <span>知识库</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-view="chat" aria-label="辩论" id="nav-chat">
+        <span class="nav-icon">💬</span>
+        <span>辩论</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-view="settings" aria-label="设置">
+        <span class="nav-icon">⚙️</span>
+        <span>设置</span>
+      </button>
+    </nav>
+
+    <div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
+
+    <div class="mic-overlay" id="mic-overlay" aria-hidden="true">
+      <div class="mic-wave">🎙️</div>
+      <div class="mic-text">正在聆听...</div>
+      <button class="mic-cancel" id="mic-cancel">取消</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== Store State Management =====
+    const Store = {
+      state: {
+        currentView: 'bookmarks',
+        previousView: null,
+        bookmarks: [],
+        topics: [],
+        currentDebate: {
+          articleId: null,
+          turn: 0,
+          maxTurns: 3,
+          aggressiveness: 'medium',
+          messages: [],
+          isActive: false,
+          isAiTyping: false,
+          status: 'idle'
+        },
+        settings: {
+          defaultAggressiveness: 'medium',
+          notificationsEnabled: true,
+          voiceEnabled: true,
+          passiveNotifyTime: 5
+        },
+        ui: {
+          toast: { visible: false, message: '', icon: '', action: null },
+          micActive: false,
+          parseLoading: false
+        }
+      },
+      listeners: new Set(),
+      subscribe(fn) { this.listeners.add(fn); },
+      setState(partial) {
+        Object.assign(this.state, partial);
+        this.listeners.forEach(fn => fn(this.state));
+      },
+
+      addBookmark(data) {
+        const bookmark = {
+          id: 'bm-' + Date.now(),
+          title: data.title,
+          content: data.content || '',
+          url: data.url || '',
+          topic: data.topic || '未分类',
+          tags: data.tags || [],
+          parsedAt: Date.now(),
+          mastery: 0,
+          debateCount: 0
+        };
+        const bookmarks = [...this.state.bookmarks, bookmark];
+        this.setState({ bookmarks });
+        this.rebuildTopics();
+      },
+
+      rebuildTopics() {
+        const topicMap = {};
+        this.state.bookmarks.forEach(bm => {
+          if (!topicMap[bm.topic]) {
+            topicMap[bm.topic] = { name: bm.topic, mastery: 0, articleIds: [], color: this.getTopicColor(bm.topic) };
+          }
+          topicMap[bm.topic].articleIds.push(bm.id);
+        });
+        Object.values(topicMap).forEach(t => {
+          const articles = t.articleIds.map(id => this.state.bookmarks.find(b => b.id === id)).filter(Boolean);
+          t.mastery = articles.length ? Math.round(articles.reduce((s, a) => s + a.mastery, 0) / articles.length) : 0;
+        });
+        this.setState({ topics: Object.values(topicMap) });
+      },
+
+      getTopicColor(topic) {
+        const colors = ['#ff7a45', '#36cfc9', '#9254de', '#ffc53d', '#f759ab', '#52c41a'];
+        let hash = 0;
+        for (let i = 0; i < topic.length; i++) hash = topic.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+      },
+
+      startDebate(articleId) {
+        const article = this.state.bookmarks.find(b => b.id === articleId);
+        if (!article) return;
+        const aggressiveness = this.state.settings.defaultAggressiveness;
+        const opening = this.generateOpening(article, aggressiveness);
+        this.setState({
+          currentDebate: {
+            articleId,
+            turn: 0,
+            maxTurns: 3,
+            aggressiveness,
+            messages: [{ id: 1, role: 'ai', content: opening, time: this.formatTime() }],
+            isActive: true,
+            isAiTyping: false,
+            status: 'opening'
+          },
+          currentView: 'chat',
+          previousView: this.state.currentView
+        });
+      },
+
+      generateOpening(article, level) {
+        const kp = article.keyPoint || '作者提出了一些有趣的观点';
+        const cp = article.counterPoint || '但我有不同看法';
+        const templates = {
+          low: `你之前收藏了《${article.title}》。里面提到"${kp}"，这个观点挺有意思。不过我读到另一个角度的解读——${cp}。你怎么看这两种说法？`,
+          medium: `你收藏了《${article.title}》，里面说"${kp}"。但我越看越觉得有问题——${cp}。你站哪边？`,
+          high: `《${article.title}》你收藏了这么久，里面那句"${kp}"我实在忍不了了——${cp}。来，我今天必须跟你辩清楚！`
+        };
+        return templates[level] || templates.medium;
+      },
+
+      sendUserMessage(content) {
+        const debate = this.state.currentDebate;
+        if (!debate.isActive || debate.isAiTyping) return;
+
+        const messages = [...debate.messages, {
+          id: debate.messages.length + 1,
+          role: 'user',
+          content,
+          time: this.formatTime()
+        }];
+
+        this.setState({ currentDebate: { ...debate, messages, isAiTyping: true } });
+
+        // Check if user gave reasoning
+        const hasReasoning = content.length > 15 || /因为|理由|我觉得|我认为|原因是/.test(content);
+
+        setTimeout(() => {
+          const nextTurn = debate.turn + 1;
+          let aiResponse;
+
+          if (!hasReasoning && debate.turn < debate.maxTurns) {
+            aiResponse = `等等，你还没告诉我具体的理由呢？是因为个人经验，还是觉得作者忽略了什么？`;
+            // Don't advance turn if no reasoning
+            const updatedMessages = [...this.state.currentDebate.messages, {
+              id: this.state.currentDebate.messages.length + 1,
+              role: 'ai',
+              content: aiResponse,
+              time: this.formatTime()
+            }];
+            this.setState({
+              currentDebate: { ...this.state.currentDebate, messages: updatedMessages, isAiTyping: false }
+            });
+            return;
+          }
+
+          if (nextTurn >= debate.maxTurns) {
+            const masteryGain = 10 + Math.floor(Math.random() * 21); // 10-30%
+            aiResponse = `辩论结束！恭喜，通过这场辩论你已吸收《${this.getArticleTitle(debate.articleId)}》约${masteryGain}%的精髓。你的观点很有深度，已收录进你的「个人观点库」。`;
+            this.completeDebate(masteryGain);
+          } else {
+            aiResponse = this.generateRebuttal(debate, content);
+          }
+
+          const updatedMessages = [...this.state.currentDebate.messages, {
+            id: this.state.currentDebate.messages.length + 1,
+            role: 'ai',
+            content: aiResponse,
+            time: this.formatTime()
+          }];
+
+          this.setState({
+            currentDebate: {
+              ...this.state.currentDebate,
+              messages: updatedMessages,
+              turn: nextTurn >= debate.maxTurns ? debate.maxTurns : nextTurn,
+              isAiTyping: false,
+              status: nextTurn >= debate.maxTurns ? 'completed' : 'debating',
+              isActive: nextTurn < debate.maxTurns
+            }
+          });
+        }, 1200);
+      },
+
+      generateRebuttal(debate, userContent) {
+        const article = this.state.bookmarks.find(b => b.id === debate.articleId);
+        const level = debate.aggressiveness;
+        const rebuttals = {
+          low: [
+            `我理解你的角度。不过如果我们换个视角来看，作者可能忽略了实际执行中的困难。你觉得呢？`,
+            `这个观点有道理。但我想补充一点：在不同的场景下，结论可能会不一样。你能举个例子吗？`,
+            `你说得对一部分。不过据我了解，有研究显示相反的结果。你怎么看这些不同的证据？`
+          ],
+          medium: [
+            `但你想过没？你说的这个方法在实际操作中可能并不那么顺利。很多人试过但坚持不下来。`,
+            `我不同意。如果按你说的做，短期内可能有效果，但长期来看反而会有副作用。你能反驳吗？`,
+            `作者确实提到了这点，但刻意回避了最关键的反面论据。你看出来了吗？`
+          ],
+          high: [
+            `这完全说不通！你说的这个逻辑有个致命的漏洞——如果每个人都这么想，结果会是什么？`,
+            `我坚决反对。这个观点已经被无数研究证伪了，你还在坚持，理由是什么？`,
+            `太天真了。现实世界根本不是这样运转的。我给你举个反例，看你还能怎么辩。`
+          ]
+        };
+        const list = rebuttals[level] || rebuttals.medium;
+        return list[Math.floor(Math.random() * list.length)];
+      },
+
+      completeDebate(masteryGain) {
+        const bookmarks = this.state.bookmarks.map(bm => {
+          if (bm.id === this.state.currentDebate.articleId) {
+            return { ...bm, mastery: Math.min(100, bm.mastery + masteryGain), debateCount: bm.debateCount + 1 };
+          }
+          return bm;
+        });
+        this.setState({ bookmarks });
+        this.rebuildTopics();
+      },
+
+      getArticleTitle(id) {
+        const article = this.state.bookmarks.find(b => b.id === id);
+        return article ? article.title : '这篇文章';
+      },
+
+      changeAggressiveness(level) {
+        this.setState({
+          currentDebate: { ...this.state.currentDebate, aggressiveness: level }
+        });
+      },
+
+      formatTime() {
+        const now = new Date();
+        return `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      },
+
+      resetData() {
+        this.state.bookmarks = JSON.parse(JSON.stringify(DEMO_BOOKMARKS));
+        this.rebuildTopics();
+        this.setState({ currentView: 'bookmarks' });
+      }
+    };
+
+    // ===== Demo Data =====
+    const DEMO_BOOKMARKS = [
+      {
+        id: 'demo-1',
+        title: '如何克服拖延症：科学方法与实践',
+        content: '番茄工作法强调25分钟专注+5分钟休息的循环。研究表明，这种时间切割能有效降低任务启动的心理阻力。但 critics 认为这会打断心流状态...',
+        url: 'https://zhuanlan.zhihu.com/procrastination',
+        topic: '自我管理',
+        tags: ['效率', '心理学'],
+        parsedAt: Date.now() - 86400000 * 7,
+        mastery: 65,
+        debateCount: 3,
+        keyPoint: '番茄工作法通过25分钟专注+5分钟休息的循环，能有效降低拖延行为，让任务启动变得更容易',
+        counterPoint: '刻意切割时间反而破坏心流状态，真正的高效需要至少90分钟不间断的沉浸，番茄钟是在训练注意力碎片化'
+      },
+      {
+        id: 'demo-2',
+        title: '非暴力沟通：职场版的四个步骤',
+        content: '观察、感受、需要、请求——非暴力沟通的四步法在职场中的应用。当我们不带评判地描述观察，表达真实感受，明确内心需要，提出具体请求...',
+        url: 'https://mp.weixin.qq.com/nvc-workplace',
+        topic: '职场沟通',
+        tags: ['沟通', '职场'],
+        parsedAt: Date.now() - 86400000 * 3,
+        mastery: 42,
+        debateCount: 1,
+        keyPoint: '职场中用"观察-感受-需要-请求"四步法沟通，可以避免对抗，让双方更容易达成共识',
+        counterPoint: '职场不是心理咨询室，过度暴露感受反而显得不专业，有时候直接说"这个方案有问题"比绕弯子更高效'
+      },
+      {
+        id: 'demo-3',
+        title: '深度工作：在碎片化时代如何专注',
+        content: 'Cal Newport 提出深度工作的四种哲学：修道院式、双峰式、节奏式、记者式。每种哲学适合不同性格和生活节奏的人...',
+        url: 'https://www.bilibili.com/deep-work',
+        topic: '自我管理',
+        tags: ['专注', '工作法'],
+        parsedAt: Date.now() - 86400000 * 1,
+        mastery: 28,
+        debateCount: 0,
+        keyPoint: '在碎片化的时代，刻意安排大块不受打扰的时间进行深度工作，是产出高价值成果的关键',
+        counterPoint: '深度工作是一种精英主义的幻想，对大部分打工人来说，能在夹缝中完成浅层工作就已经很奢侈了'
+      },
+      {
+        id: 'demo-4',
+        title: '影响力：说服他人的六大心理武器',
+        content: '互惠、承诺一致、社会认同、喜好、权威、稀缺——Cialdini提出的六大影响力原则。在日常生活和职场中，这些原则无处不在...',
+        url: 'https://zhuanlan.zhihu.com/influence',
+        topic: '心理学',
+        tags: ['说服', '心理'],
+        parsedAt: Date.now() - 86400000 * 5,
+        mastery: 15,
+        debateCount: 0,
+        keyPoint: '互惠、社会认同、权威等六大心理原则可以解释为什么人们会做出某些决定，掌握它们能提升说服力',
+        counterPoint: '把人际关系简化为心理操控术很 cynical，真正的影响力来自真诚和价值交换，而不是套路'
+      },
+      {
+        id: 'demo-5',
+        title: '原子习惯：养成好习惯的四个定律',
+        content: '让提示显而易见、让渴求有吸引力、让反应简便易行、让奖励令人愉悦。James Clear 提出的行为改变四步法，帮助建立持久好习惯...',
+        url: 'https://mp.weixin.qq.com/atomic-habits',
+        topic: '自我管理',
+        tags: ['习惯', '成长'],
+        parsedAt: Date.now() - 86400000 * 4,
+        mastery: 55,
+        debateCount: 2,
+        keyPoint: '好习惯不是靠意志力硬撑，而是通过设计环境、降低阻力、即时奖励，让好行为变得像刷牙一样自然',
+        counterPoint: '过度优化习惯系统本身就是一种拖延。与其研究怎么养成习惯，不如直接开始做'
+      },
+      {
+        id: 'demo-6',
+        title: '思考，快与慢：决策中的认知偏差',
+        content: '系统1（直觉）和系统2（理性）如何共同主导我们的决策。锚定效应、可得性启发、代表性启发等认知偏差如何悄悄影响判断...',
+        url: 'https://www.bilibili.com/thinking-fast-slow',
+        topic: '思维方式',
+        tags: ['决策', '认知'],
+        parsedAt: Date.now() - 86400000 * 6,
+        mastery: 35,
+        debateCount: 1,
+        keyPoint: '人类大脑有系统1（直觉快思考）和系统2（理性慢思考），多数决策被直觉主导，容易产生认知偏差',
+        counterPoint: '过分警惕认知偏差反而会让人陷入分析 paralysis，直觉在信息不完整时往往是更优解'
+      },
+      {
+        id: 'demo-7',
+        title: '金字塔原理：结构化表达与写作',
+        content: '结论先行、以上统下、归类分组、逻辑递进。Barbara Minto 提出的金字塔结构，帮助职场人清晰表达复杂观点...',
+        url: 'https://zhuanlan.zhihu.com/pyramid-principle',
+        topic: '职场沟通',
+        tags: ['表达', '写作'],
+        parsedAt: Date.now() - 86400000 * 2,
+        mastery: 20,
+        debateCount: 0,
+        keyPoint: '表达复杂观点时应该先给结论，再用论据支撑，这样听众能快速抓住重点，沟通效率更高',
+        counterPoint: '一上来就抛结论很傲慢，好的沟通应该像侦探小说一样层层铺垫，让听众自己得出结论才有参与感'
+      },
+      {
+        id: 'demo-8',
+        title: '心流：最优体验心理学',
+        content: 'Csikszentmihalyi 提出的心流理论：当挑战与技能达到平衡时，人会进入忘我的专注状态。如何设计生活和工作以创造更多心流体验...',
+        url: 'https://mp.weixin.qq.com/flow-psychology',
+        topic: '心理学',
+        tags: ['专注', '幸福'],
+        parsedAt: Date.now() - 86400000 * 8,
+        mastery: 45,
+        debateCount: 2,
+        keyPoint: '当挑战难度与个人技能匹配时，人会进入心流状态——全神贯注、忘记时间，这是最幸福的体验之一',
+        counterPoint: '追求心流本身就是一种焦虑源，真正的幸福来自接受平凡，而不是不断寻找最优体验'
+      },
+      {
+        id: 'demo-9',
+        title: 'OKR工作法：目标管理实战指南',
+        content: 'Objectives and Key Results，从Google到字节跳动的目标管理方法。如何设定有野心的目标，以及如何拆解为可衡量的关键结果...',
+        url: 'https://zhuanlan.zhihu.com/okr-guide',
+        topic: '效率提升',
+        tags: ['目标', '管理'],
+        parsedAt: Date.now() - 86400000 * 10,
+        mastery: 10,
+        debateCount: 0,
+        keyPoint: 'OKR通过设定有野心的目标和可衡量的关键结果，让团队上下对齐方向，聚焦最重要的事',
+        counterPoint: 'OKR在大厂演变成新的内卷工具，员工花一半时间写OKR、对齐OKR，真正干活的时间反而少了'
+      },
+      {
+        id: 'demo-10',
+        title: '批判性思维工具箱：识别逻辑谬误',
+        content: '稻草人谬误、滑坡谬误、假两难推理、诉诸权威...学会识别日常对话和文章中的逻辑陷阱，形成独立思考能力...',
+        url: 'https://www.bilibili.com/critical-thinking',
+        topic: '思维方式',
+        tags: ['逻辑', '思辨'],
+        parsedAt: Date.now() - 86400000 * 12,
+        mastery: 0,
+        debateCount: 0,
+        keyPoint: '学会识别稻草人谬误、滑坡谬误等常见逻辑陷阱，能帮助我们不被忽悠，形成独立思考能力',
+        counterPoint: '过度追求逻辑严谨会扼杀创造力，很多伟大的想法在初期都是"不合逻辑"的直觉跳跃'
+      }
+    ];
+
+    // ===== Voice Simulation Texts =====
+    const VOICE_TEXTS = [
+      '我觉得番茄工作法还行吧，因为25分钟刚好是一段专注的时间，不会太长让人焦虑',
+      '不对，我反对！心流被打断反而更浪费时间，沉浸式工作才是最高效的',
+      '我理解作者的意思，但在实际工作中很难做到完全不被人打扰',
+      '我的理由是：我试过这个方法，第一周有效，第二周就坚持不下来了',
+      '从心理学角度来说，自我效能感比具体方法更重要，你觉得呢？'
+    ];
+
+    // ===== View Renderers =====
+    function renderBookmarksView(state) {
+      const { bookmarks } = state;
+      if (!bookmarks.length) {
+        return `
+          <div class="view">
+            <div class="empty-state">
+              <div class="empty-icon">📭</div>
+              <h3>收藏夹空空如也</h3>
+              <p>点击底部「添加」按钮，开始收藏你的第一篇文章</p>
+            </div>
+          </div>`;
+      }
+
+      const cards = bookmarks.map((bm, i) => `
+        <article class="card" style="margin-bottom: 12px; animation: cardIn 0.4s ${i * 0.1}s cubic-bezier(0.34, 1.56, 0.64, 1) both;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <span class="tag primary">${bm.topic}</span>
+            <span class="mastery-badge">${bm.mastery}%</span>
+          </div>
+          <h3 class="card-title">${bm.title}</h3>
+          <p class="card-text" style="margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${bm.content}</p>
+          <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px;">
+            ${bm.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.75rem; color:var(--text-muted);">已辩论 ${bm.debateCount} 次</span>
+            <button class="btn btn-primary btn-sm" onclick="Store.startDebate('${bm.id}')">开始辩论</button>
+          </div>
+        </article>
+      `).join('');
+
+      return `
+        <div class="view">
+          <div style="margin-bottom:16px;">
+            <h2 style="font-size:1.3rem; font-weight:700;">我的收藏</h2>
+            <p style="font-size:0.85rem; color:var(--text-secondary);">共 ${bookmarks.length} 篇文章，${state.topics.length} 个主题</p>
+          </div>
+          ${cards}
+        </div>
+        <style>
+          @keyframes cardIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        </style>
+      `;
+    }
+
+    function renderAddView(state) {
+      return `
+        <div class="view">
+          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:4px;">添加收藏</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">粘贴文章链接或手动输入内容</p>
+
+          <div class="form-group">
+            <label class="form-label">文章链接（可选）</label>
+            <input type="url" class="form-input" id="add-url" placeholder="https://...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">文章标题</label>
+            <input type="text" class="form-input" id="add-title" placeholder="输入文章标题">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">文章内容 / 摘要</label>
+            <textarea class="form-textarea" id="add-content" placeholder="粘贴文章内容或核心观点..."></textarea>
+          </div>
+
+          <button class="btn btn-secondary btn-block" id="btn-parse" style="margin-bottom:12px;">
+            <span id="parse-icon">✨</span> 模拟AI解析
+          </button>
+
+          <div id="parse-result" style="display:none; margin-bottom:16px;">
+            <div class="card" style="background: linear-gradient(135deg, rgba(255,122,69,0.05), rgba(146,84,222,0.05)); border-color: var(--accent-primary);">
+              <div style="font-size:0.85rem; font-weight:600; color:var(--accent-primary); margin-bottom:8px;">✨ AI 解析结果</div>
+              <div style="margin-bottom:8px;">
+                <span style="font-size:0.8rem; color:var(--text-secondary);">识别主题：</span>
+                <span class="tag primary" id="parsed-topic">--</span>
+              </div>
+              <div>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">相关标签：</span>
+                <span id="parsed-tags">--</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btn-add-confirm" style="opacity:0.5; pointer-events:none;">
+            确认添加
+          </button>
+        </div>
+      `;
+    }
+
+    function renderKnowledgeView(state) {
+      const { topics, bookmarks } = state;
+      const totalMastery = topics.length
+        ? Math.round(topics.reduce((s, t) => s + t.mastery, 0) / topics.length)
+        : 0;
+
+      const topicSections = topics.map((topic, i) => {
+        const articles = bookmarks.filter(b => topic.articleIds.includes(b.id));
+        return `
+          <div class="card" style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:12px; height:12px; border-radius:50%; background:${topic.color};"></div>
+                <span style="font-weight:600;">${topic.name}</span>
+              </div>
+              <span style="font-size:0.85rem; font-weight:700; color:${topic.color};">${topic.mastery}%</span>
+            </div>
+            <div class="progress-track" style="margin-bottom:12px;">
+              <div class="progress-fill" data-width="${topic.mastery}%" style="width:0; background: linear-gradient(90deg, ${topic.color}, ${topic.color}88);"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${articles.map(a => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);">
+                  <span style="font-size:0.85rem;">${a.title}</span>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">${a.mastery}%</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="view">
+          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:4px;">知识库</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">按主题聚合的收藏与掌握度</p>
+
+          <div class="card" style="text-align:center; margin-bottom:20px; background: linear-gradient(135deg, rgba(255,122,69,0.08), rgba(146,84,222,0.08));">
+            <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:8px;">总掌握度</div>
+            <div style="font-size:3rem; font-weight:800; background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${totalMastery}%</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">${topics.length} 个主题 · ${bookmarks.length} 篇文章</div>
+          </div>
+
+          ${topicSections || '<div class="empty-state"><div class="empty-icon">🧠</div><h3>暂无知识库数据</h3><p>添加收藏后自动生成分类</p></div>'}
+        </div>
+      `;
+    }
+
+    function renderChatView(state) {
+      const debate = state.currentDebate;
+      const article = state.bookmarks.find(b => b.id === debate.articleId);
+
+      if (!article) {
+        return `
+          <div class="view">
+            <div class="empty-state">
+              <div class="empty-icon">💬</div>
+              <h3>还没有进行中的辩论</h3>
+              <p>从收藏夹选择一篇文章，开始一场AI辩论</p>
+              <button class="btn btn-primary" style="margin-top:16px;" onclick="Store.setState({ currentView: 'bookmarks' })">去收藏夹</button>
+            </div>
+          </div>`;
+      }
+
+      const aggressivenessLabel = { low: '温和', medium: '中档', high: '激烈' }[debate.aggressiveness] || '中档';
+      const aggressivenessColor = { low: '#52c41a', medium: '#ff7a45', high: '#f5222d' }[debate.aggressiveness];
+
+      const messagesHtml = debate.messages.map(msg => {
+        const isAi = msg.role === 'ai';
+        return `
+          <div style="display:flex; ${isAi ? '' : 'justify-content:flex-end;'} margin-bottom:12px; animation: msgIn 0.2s ease-out;">
+            <div style="max-width:80%; padding:12px 16px; border-radius:18px; font-size:0.9rem; line-height:1.5;
+              ${isAi
+                ? `background: rgba(255,122,69,0.08); border:1px solid rgba(255,122,69,0.15); border-bottom-left-radius:4px; color:var(--text-primary);`
+                : `background: rgba(54,207,201,0.08); border:1px solid rgba(54,207,201,0.15); border-bottom-right-radius:4px; color:var(--text-primary); margin-left:auto;`
+              }">
+              <div>${msg.content}</div>
+              <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px; text-align:right;">${msg.time}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const typingIndicator = debate.isAiTyping ? `
+        <div style="display:flex; margin-bottom:12px; animation: msgIn 0.2s ease-out;">
+          <div style="padding:12px 16px; border-radius:18px; background:rgba(255,122,69,0.08); border:1px solid rgba(255,122,69,0.15); border-bottom-left-radius:4px;">
+            <div style="display:flex; gap:4px; align-items:center; height:20px;">
+              <span class="visually-hidden">AI正在输入</span>
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--accent-primary); animation: typingBounce 1.2s infinite;"></span>
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--accent-primary); animation: typingBounce 1.2s 0.2s infinite;"></span>
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--accent-primary); animation: typingBounce 1.2s 0.4s infinite;"></span>
+            </div>
+          </div>
+        </div>
+      ` : '';
+
+      const aggBtns = ['low','medium','high'].map(lvl => {
+        const lbl = { low: '温和', medium: '中档', high: '激烈' }[lvl];
+        return `<button class="chat-agg-btn ${debate.aggressiveness === lvl ? 'active' : ''}" data-agg-change="${lvl}">${lbl}</button>`;
+      }).join('');
+
+      return `
+        <div class="view chat-view">
+          <div style="padding:12px 20px; border-bottom:1px solid var(--border-color); background:rgba(255,255,255,0.95);">
+            <div style="font-size:0.85rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${article.title}</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+              <span style="font-size:0.75rem; color:var(--text-muted);">杠精模式</span>
+              <div class="chat-agg-toggle">${aggBtns}</div>
+            </div>
+          </div>
+
+          <div id="chat-messages" style="flex:1; overflow-y:auto; padding:16px 20px;" role="log" aria-live="polite" aria-atomic="false" aria-label="辩论消息">
+            ${messagesHtml}
+            ${typingIndicator}
+          </div>
+
+          <div style="padding:12px 20px; border-top:1px solid var(--border-color); background:rgba(255,255,255,0.95);">
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+              <button class="header-btn" id="chat-mic-btn" aria-label="语音输入" style="flex-shrink:0;">🎙️</button>
+              <div style="flex:1; position:relative;">
+                <textarea id="chat-input" placeholder="输入你的观点反驳AI..." style="width:100%; padding:10px 14px; border-radius:20px; border:1px solid var(--border-color); background:var(--bg-input); font-family:inherit; font-size:0.9rem; resize:none; height:44px; max-height:120px; line-height:1.4;" rows="1"></textarea>
+              </div>
+              <button class="btn btn-primary" id="chat-send-btn" style="padding:10px 18px; flex-shrink:0;" ${debate.isAiTyping || !debate.isActive ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
+            </div>
+            ${!debate.isActive ? `<div style="text-align:center; margin-top:8px; font-size:0.8rem; color:var(--text-muted);">辩论已结束，可从收藏夹开启新辩论</div>` : ''}
+          </div>
+        </div>
+        <style>
+          @keyframes msgIn {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+          }
+        </style>
+      `;
+    }
+
+    function renderSettingsView(state) {
+      const { settings } = state;
+      const aggLabels = { low: '温和', medium: '中档', high: '激烈' };
+
+      return `
+        <div class="view">
+          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:4px;">设置</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">调整你的辩论偏好</p>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div style="font-size:0.85rem; font-weight:600; margin-bottom:12px; color:var(--text-secondary);">AI 杠精程度</div>
+            <div class="segment-control">
+              <button class="segment-item ${settings.defaultAggressiveness === 'low' ? 'active' : ''}" data-agg="low">${aggLabels.low}</button>
+              <button class="segment-item ${settings.defaultAggressiveness === 'medium' ? 'active' : ''}" data-agg="medium">${aggLabels.medium}</button>
+              <button class="segment-item ${settings.defaultAggressiveness === 'high' ? 'active' : ''}" data-agg="high">${aggLabels.high}</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">碎片时间提醒</div>
+                <div class="toggle-desc">在设定时间主动推送辩论邀请</div>
+              </div>
+              <div class="toggle-switch ${settings.notificationsEnabled ? 'active' : ''}" data-setting="notificationsEnabled"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">语音输入</div>
+                <div class="toggle-desc">允许使用麦克风进行语音辩论</div>
+              </div>
+              <div class="toggle-switch ${settings.voiceEnabled ? 'active' : ''}" data-setting="voiceEnabled"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">自动播放语音</div>
+                <div class="toggle-desc">AI消息自动播放语音（模拟）</div>
+              </div>
+              <div class="toggle-switch ${settings.voiceEnabled ? 'active' : ''}" data-setting="autoPlayVoice"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="font-size:0.85rem; font-weight:600; margin-bottom:8px; color:var(--text-secondary);">演示数据</div>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">重置所有数据为初始演示状态</p>
+            <button class="btn btn-secondary btn-block" id="btn-reset">🔄 重置演示数据</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // ===== Main Render =====
+    function render(state) {
+      const router = document.getElementById('router-view');
+      const headerTitle = document.getElementById('header-title');
+      const headerBack = document.getElementById('header-back');
+      const titles = {
+        bookmarks: '我的收藏',
+        add: '添加收藏',
+        knowledge: '知识库',
+        chat: 'AI 辩论',
+        settings: '设置'
+      };
+
+      headerTitle.textContent = titles[state.currentView] || 'AI杠精读书会';
+
+      if (state.currentView === 'chat' && state.currentDebate.isActive) {
+        headerBack.classList.remove('hidden');
+        headerBack.onclick = () => Store.setState({ currentView: state.previousView || 'bookmarks' });
+      } else {
+        headerBack.classList.add('hidden');
+      }
+
+      switch(state.currentView) {
+        case 'bookmarks': router.innerHTML = renderBookmarksView(state); break;
+        case 'add': router.innerHTML = renderAddView(state); break;
+        case 'knowledge': router.innerHTML = renderKnowledgeView(state); break;
+        case 'chat': router.innerHTML = renderChatView(state); break;
+        case 'settings': router.innerHTML = renderSettingsView(state); break;
+      }
+
+      // Update bottom nav
+      document.querySelectorAll('.nav-item').forEach(item => {
+        const isActive = item.dataset.view === state.currentView;
+        item.classList.toggle('active', isActive);
+        item.setAttribute('aria-selected', isActive);
+      });
+
+      // Post-render hooks
+      if (state.currentView === 'knowledge') {
+        setTimeout(() => {
+          document.querySelectorAll('.progress-fill[data-width]').forEach(el => {
+            el.style.width = el.dataset.width;
+          });
+        }, 100);
+      }
+
+      if (state.currentView === 'chat') {
+        const chatMessages = document.getElementById('chat-messages');
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      // Toast
+      updateToast(state.ui.toast);
+    }
+
+    function updateToast(toast) {
+      const container = document.getElementById('toast-container');
+      if (!toast.visible) { container.innerHTML = ''; return; }
+      container.innerHTML = `
+        <div class="toast">
+          <div class="toast-icon">${toast.icon}</div>
+          <div class="toast-body">
+            <div class="toast-title">${toast.title || 'AI 杠精'}</div>
+            <div class="toast-msg">${toast.message}</div>
+          </div>
+          ${toast.action ? `<button class="toast-action" id="toast-action">${toast.action.text}</button>` : ''}
+        </div>
+      `;
+      if (toast.action) {
+        document.getElementById('toast-action').addEventListener('click', () => {
+          toast.action.onClick();
+          hideToast();
+        });
+      }
+      // Auto-hide after 4 seconds
+      setTimeout(hideToast, 4000);
+    }
+
+    function hideToast() {
+      const toast = document.querySelector('.toast');
+      if (toast) {
+        toast.classList.add('hiding');
+        setTimeout(() => {
+          Store.setState({ ui: { ...Store.state.ui, toast: { visible: false } } });
+        }, 300);
+      }
+    }
+
+    function showToast(message, icon, action, title) {
+      Store.setState({ ui: { ...Store.state.ui, toast: { visible: true, message, icon, action, title } } });
+    }
+
+    // ===== Event Delegation =====
+    document.addEventListener('click', e => {
+      // Bottom nav
+      const navItem = e.target.closest('.nav-item');
+      if (navItem) {
+        const view = navItem.dataset.view;
+        if (view) Store.setState({ currentView: view, previousView: Store.state.currentView });
+      }
+
+      // Add bookmark - parse button
+      if (e.target.closest('#btn-parse')) {
+        const btn = document.getElementById('btn-parse');
+        const title = document.getElementById('add-title').value.trim();
+        if (!title) { showToast('请先输入文章标题', '⚠️', null, '提示'); return; }
+
+        btn.innerHTML = '<span class="spinner"></span> AI 解析中...';
+        btn.disabled = true;
+        Store.setState({ ui: { ...Store.state.ui, parseLoading: true } });
+
+        setTimeout(() => {
+          const topicsPool = ['自我管理', '职场沟通', '心理学', '效率提升', '思维方式'];
+          const tagsPool = ['效率', '心理学', '职场', '沟通', '思维', '成长', '习惯', '方法论'];
+          const parsedTopic = topicsPool[Math.floor(Math.random() * topicsPool.length)];
+          const parsedTags = [tagsPool[Math.floor(Math.random() * tagsPool.length)], tagsPool[Math.floor(Math.random() * tagsPool.length)]];
+
+          document.getElementById('parsed-topic').textContent = parsedTopic;
+          document.getElementById('parsed-tags').innerHTML = parsedTags.map(t => `<span class="tag secondary">${t}</span>`).join('');
+          document.getElementById('parse-result').style.display = 'block';
+
+          btn.innerHTML = '<span>✅</span> 解析完成';
+          btn.style.background = 'rgba(54,207,201,0.1)';
+          btn.style.color = 'var(--accent-secondary)';
+
+          const confirmBtn = document.getElementById('btn-add-confirm');
+          confirmBtn.style.opacity = '1';
+          confirmBtn.style.pointerEvents = 'all';
+          confirmBtn.dataset.parsedTopic = parsedTopic;
+          confirmBtn.dataset.parsedTags = JSON.stringify(parsedTags);
+        }, 1500);
+      }
+
+      // Add bookmark - confirm button
+      if (e.target.closest('#btn-add-confirm')) {
+        const title = document.getElementById('add-title').value.trim();
+        const content = document.getElementById('add-content').value.trim();
+        const url = document.getElementById('add-url').value.trim();
+        const confirmBtn = document.getElementById('btn-add-confirm');
+        const topic = confirmBtn.dataset.parsedTopic || '未分类';
+        const tags = confirmBtn.dataset.parsedTags ? JSON.parse(confirmBtn.dataset.parsedTags) : [];
+
+        if (!title) { showToast('请输入文章标题', '⚠️', null, '提示'); return; }
+
+        Store.addBookmark({ title, content, url, topic, tags });
+        showToast('收藏添加成功！', '✅', null, '成功');
+        Store.setState({ currentView: 'bookmarks' });
+      }
+
+      // Chat send button
+      if (e.target.closest('#chat-send-btn')) {
+        const input = document.getElementById('chat-input');
+        const content = input.value.trim();
+        if (!content) return;
+        input.value = '';
+        Store.sendUserMessage(content);
+      }
+
+      // Chat mic button
+      if (e.target.closest('#chat-mic-btn')) {
+        if (!Store.state.currentDebate.isActive) { showToast('辩论已结束', '💤', null, '提示'); return; }
+        document.getElementById('mic-overlay').classList.add('active');
+        Store.setState({ ui: { ...Store.state.ui, micActive: true } });
+
+        setTimeout(() => {
+          document.getElementById('mic-overlay').classList.remove('active');
+          Store.setState({ ui: { ...Store.state.ui, micActive: false } });
+          const text = VOICE_TEXTS[Math.floor(Math.random() * VOICE_TEXTS.length)];
+          const input = document.getElementById('chat-input');
+          if (input) input.value = text;
+        }, 2500);
+      }
+
+      // Mic cancel
+      if (e.target.closest('#mic-cancel')) {
+        document.getElementById('mic-overlay').classList.remove('active');
+        Store.setState({ ui: { ...Store.state.ui, micActive: false } });
+      }
+
+      // Chat - aggressiveness toggle
+      const aggBtn = e.target.closest('.chat-agg-btn[data-agg-change]');
+      if (aggBtn) {
+        const level = aggBtn.dataset.aggChange;
+        Store.changeAggressiveness(level);
+      }
+
+      // Settings - aggressiveness segment
+      const segItem = e.target.closest('.segment-item[data-agg]');
+      if (segItem) {
+        const agg = segItem.dataset.agg;
+        Store.setState({ settings: { ...Store.state.settings, defaultAggressiveness: agg } });
+      }
+
+      // Settings - toggle switch
+      const toggle = e.target.closest('.toggle-switch[data-setting]');
+      if (toggle) {
+        const setting = toggle.dataset.setting;
+        if (setting === 'notificationsEnabled' || setting === 'voiceEnabled') {
+          const current = Store.state.settings[setting];
+          const next = !current;
+          Store.setState({ settings: { ...Store.state.settings, [setting]: next } });
+          if (setting === 'notificationsEnabled') {
+            if (next) {
+              if (!appEntered) startLockscreenLoop();
+              else startAppToastLoop();
+            } else {
+              stopLockscreenLoop();
+              stopAppToastLoop();
+            }
+          }
+        }
+      }
+
+      // Settings - reset
+      if (e.target.closest('#btn-reset')) {
+        Store.resetData();
+        showToast('演示数据已重置', '🔄', null, '重置');
+      }
+    });
+
+    // Chat input - Enter to send
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const chatInput = document.getElementById('chat-input');
+        if (document.activeElement === chatInput) {
+          e.preventDefault();
+          const content = chatInput.value.trim();
+          if (content) {
+            chatInput.value = '';
+            Store.sendUserMessage(content);
+          }
+        }
+      }
+    });
+
+    // ===== Lockscreen Logic =====
+    let lockscreenTimer = null;
+    let lockscreenNotifIndex = -1;
+    let appEntered = false;
+
+    function updateLockscreenTime() {
+      const now = new Date();
+      const timeEl = document.getElementById('lockscreen-time');
+      const dateEl = document.getElementById('lockscreen-date');
+      if (timeEl) timeEl.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      if (dateEl) {
+        const days = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+        dateEl.textContent = `${now.getMonth()+1}月${now.getDate()}日 ${days[now.getDay()]}`;
+      }
+    }
+
+    function addLockscreenNotification() {
+      if (!Store.state.settings.notificationsEnabled) return;
+      const eligible = Store.state.bookmarks.filter(b => b.mastery < 80);
+      if (!eligible.length) return;
+
+      let idx;
+      do { idx = Math.floor(Math.random() * eligible.length); }
+      while (eligible.length > 1 && idx === lockscreenNotifIndex);
+      lockscreenNotifIndex = idx;
+
+      const article = eligible[idx];
+      const scenarios = [
+        { title: '通勤时间', msg: `来辩论《${article.title}》？` },
+        { title: '午休提醒', msg: `边吃饭边聊聊《${article.title}》？` },
+        { title: '碎片时间', msg: `3分钟辩论《${article.title}》！` },
+        { title: '睡前一辩', msg: `用《${article.title}》换换脑子？` },
+        { title: 'AI 杠精', msg: `敢不敢辩论《${article.title}》？` }
+      ];
+      const scene = scenarios[Math.floor(Math.random() * scenarios.length)];
+
+      const container = document.getElementById('lockscreen-notifications');
+      if (!container) return;
+
+      const notif = document.createElement('div');
+      notif.className = 'lockscreen-notification';
+      notif.innerHTML = `
+        <div class="lockscreen-notif-icon">💬</div>
+        <div class="lockscreen-notif-body">
+          <div class="lockscreen-notif-title">
+            <span>${scene.title}</span>
+            <span class="lockscreen-notif-time">刚刚</span>
+          </div>
+          <div class="lockscreen-notif-msg">${scene.msg}</div>
+        </div>
+      `;
+      notif.addEventListener('click', () => {
+        enterApp();
+        Store.startDebate(article.id);
+      });
+
+      container.insertBefore(notif, container.firstChild);
+      // Keep only last 4 notifications
+      while (container.children.length > 4) {
+        container.removeChild(container.lastChild);
+      }
+    }
+
+    function startLockscreenLoop() {
+      if (lockscreenTimer) clearInterval(lockscreenTimer);
+      lockscreenTimer = setInterval(() => {
+        if (!appEntered) addLockscreenNotification();
+      }, 5000);
+    }
+
+    function stopLockscreenLoop() {
+      if (lockscreenTimer) { clearInterval(lockscreenTimer); lockscreenTimer = null; }
+    }
+
+    function enterApp() {
+      appEntered = true;
+      stopLockscreenLoop();
+      const lockscreen = document.getElementById('lockscreen');
+      if (lockscreen) lockscreen.classList.add('hidden');
+      // Show app header and nav
+      document.querySelector('.app-header').style.display = '';
+      document.querySelector('.bottom-nav').style.display = '';
+    }
+
+    // Enter app button
+    document.addEventListener('click', e => {
+      if (e.target.closest('#lockscreen-enter')) {
+        enterApp();
+      }
+    });
+
+    // ===== App Toast (inside app only) =====
+    let appToastTimer = null;
+    let lastToastIndex = -1;
+
+    function triggerAppToast() {
+      if (!Store.state.settings.notificationsEnabled || !appEntered) return;
+      const eligible = Store.state.bookmarks.filter(b => b.mastery < 80);
+      if (!eligible.length) return;
+
+      let idx;
+      do { idx = Math.floor(Math.random() * eligible.length); }
+      while (eligible.length > 1 && idx === lastToastIndex);
+      lastToastIndex = idx;
+
+      const article = eligible[idx];
+      showToast(
+        `碎片时间！来辩论《${article.title}》？`,
+        '💬',
+        { text: '开始', onClick: () => Store.startDebate(article.id) },
+        'AI 杠精'
+      );
+    }
+
+    function startAppToastLoop() {
+      if (appToastTimer) clearInterval(appToastTimer);
+      appToastTimer = setInterval(() => {
+        if (appEntered && !Store.state.ui.toast.visible) {
+          triggerAppToast();
+        }
+      }, 15000); // Every 15s inside app
+    }
+
+    function stopAppToastLoop() {
+      if (appToastTimer) { clearInterval(appToastTimer); appToastTimer = null; }
+    }
+
+    // ===== Initialization =====
+    Store.subscribe(render);
+    Store.resetData();
+    render(Store.state);
+
+    // Setup lockscreen
+    updateLockscreenTime();
+    setInterval(updateLockscreenTime, 1000);
+    // Hide app chrome initially
+    document.querySelector('.app-header').style.display = 'none';
+    document.querySelector('.bottom-nav').style.display = 'none';
+
+    // Add initial notification, then start loop
+    setTimeout(() => {
+      addLockscreenNotification();
+      startLockscreenLoop();
+    }, 2000);
+
+    // App toast loop starts when entering app
+    setTimeout(startAppToastLoop, 8000);
+  </script>
+</body>
+</html>
