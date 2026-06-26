@@ -818,7 +818,10 @@
           defaultAggressiveness: 'medium',
           notificationsEnabled: true,
           voiceEnabled: true,
-          passiveNotifyTime: 5
+          passiveNotifyTime: 5,
+          aiMode: 'preset',
+          llmApiKey: '',
+          llmProvider: 'huggingface'
         },
         ui: {
           toast: { visible: false, message: '', icon: '', action: null },
@@ -896,13 +899,32 @@
       generateOpening(article, level) {
         const kp = article.keyPoint || '作者提出了一些有趣的观点';
         const cp = article.counterPoint || '但我有不同看法';
-        const templates = {
-          low: `你之前收藏了《${article.title}》。里面提到"${kp}"，这个观点挺有意思。不过我读到另一个角度的解读——${cp}。你怎么看这两种说法？`,
-          medium: `你收藏了《${article.title}》，里面说"${kp}"。但我越看越觉得有问题——${cp}。你站哪边？`,
-          high: `《${article.title}》你收藏了这么久，里面那句"${kp}"我实在忍不了了——${cp}。来，我今天必须跟你辩清楚！`
+        const openers = {
+          low: [
+            `你之前收藏了《${article.title}》。里面提到"${kp}"，这个观点挺有意思。不过我读到另一个角度的解读——${cp}。你怎么看这两种说法？`,
+            `最近重读了你收藏的《${article.title}》，发现作者强调"${kp}"。但我在想，${cp}？这不是也有道理吗？`,
+            `《${article.title}》里说"${kp}"，确实不错。但我好奇你注意到没有——${cp}？想听听你的看法。`
+          ],
+          medium: [
+            `你收藏了《${article.title}》，里面说"${kp}"。但我越看越觉得有问题——${cp}。你站哪边？`,
+            `《${article.title}》的观点"${kp}"，emmm...我觉得它忽略了更重要的一面：${cp}。你怎么想？`,
+            `读了《${article.title}》，作者说"${kp}"。但我持保留态度——${cp}。这你也能同意吗？`
+          ],
+          high: [
+            `《${article.title}》你收藏了这么久，里面那句"${kp}"我实在忍不了了——${cp}。来，我今天必须跟你辩清楚！`,
+            `我跟你说，《${article.title}》就是胡扯。"${kp}"？！呵呵——${cp}。有本事反驳我！`,
+            `看了你的收藏《${article.title}》，我就一句话：${cp}。你居然觉得"${kp}"是对的？？来，展开说说！`
+          ]
         };
-        return templates[level] || templates.medium;
+        const list = openers[level] || openers.medium;
+        return list[Math.floor(Math.random() * list.length)];
       },
+
+      get usedRebuttals() {
+        if (!this._usedRebuttalIndices) this._usedRebuttalIndices = [];
+        return this._usedRebuttalIndices;
+      },
+      set usedRebuttals(val) { this._usedRebuttalIndices = val; },
 
       sendUserMessage(content) {
         const debate = this.state.currentDebate;
@@ -920,12 +942,17 @@
         // Check if user gave reasoning
         const hasReasoning = content.length > 15 || /因为|理由|我觉得|我认为|原因是/.test(content);
 
-        setTimeout(() => {
+        setTimeout(async () => {
           const nextTurn = debate.turn + 1;
           let aiResponse;
 
           if (!hasReasoning && debate.turn < debate.maxTurns) {
-            aiResponse = `等等，你还没告诉我具体的理由呢？是因为个人经验，还是觉得作者忽略了什么？`;
+            const reasonMsg = {
+              low: `嗯，你的想法我大概明白了，但能展开说说你的具体理由吗？是因为个人经历，还是觉得作者的论据不够充分？`,
+              medium: `等一下——你还没告诉我为什么这么想呢？光说结论可不行，你得给我个理由。是经验还是逻辑？`,
+              high: `就这？？你好歹说个理由啊，光表态谁不会？是不同意论点还是觉得论证有漏洞？说出个123来！`
+            };
+            aiResponse = reasonMsg[debate.aggressiveness] || reasonMsg.medium;
             // Don't advance turn if no reasoning
             const updatedMessages = [...this.state.currentDebate.messages, {
               id: this.state.currentDebate.messages.length + 1,
@@ -941,10 +968,34 @@
 
           if (nextTurn >= debate.maxTurns) {
             const masteryGain = 10 + Math.floor(Math.random() * 21); // 10-30%
-            aiResponse = `辩论结束！恭喜，通过这场辩论你已吸收《${this.getArticleTitle(debate.articleId)}》约${masteryGain}%的精髓。你的观点很有深度，已收录进你的「个人观点库」。`;
+            const title = this.getArticleTitle(debate.articleId);
+            const closingMsg = {
+              low: `辩论到此结束~通过这轮讨论，你对《${title}》的理解又加深了约${masteryGain}%。你的观点已收录进「个人观点库」，下次可以从不同角度继续探索。`,
+              medium: `可以了！这场辩论下来你吸收了《${title}》约${masteryGain}%的精髓。虽然有分歧，但你的观点很有价值，已存入「个人观点库」。下次再战！`,
+              high: `哼，算你有点东西！这场辩论让你消化了《${title}》约${masteryGain}%的内容。暂时放过你，但你的观点我已经记住在「个人观点库」了，下次我可不会这么轻易收手！`
+            };
+            aiResponse = closingMsg[debate.aggressiveness] || closingMsg.medium;
             this.completeDebate(masteryGain);
           } else {
-            aiResponse = this.generateRebuttal(debate, content);
+            // Try LLM first if enabled
+            const article = this.state.bookmarks.find(b => b.id === debate.articleId);
+            const isLLMMode = this.state.settings.aiMode === 'llm' && this.state.settings.llmApiKey;
+            if (isLLMMode) {
+              const allMessages = [...this.state.currentDebate.messages, {
+                id: this.state.currentDebate.messages.length + 1,
+                role: 'user',
+                content: userContent,
+                time: this.formatTime()
+              }];
+              const llmReply = await this.generateLLMResponse(allMessages, debate.aggressiveness, article);
+              if (llmReply) {
+                aiResponse = llmReply;
+              } else {
+                aiResponse = this.generateRebuttal(debate, userContent);
+              }
+            } else {
+              aiResponse = this.generateRebuttal(debate, userContent);
+            }
           }
 
           const updatedMessages = [...this.state.currentDebate.messages, {
@@ -970,25 +1021,86 @@
       generateRebuttal(debate, userContent) {
         const article = this.state.bookmarks.find(b => b.id === debate.articleId);
         const level = debate.aggressiveness;
+        const kp = article ? (article.keyPoint || '') : '';
+        const cp = article ? (article.counterPoint || '') : '';
+        const title = article ? article.title : '这篇文章';
+
+        // Reference user's content type
+        const userAgrees = /同意|对|是的|没错|有道理|确实|支持/.test(userContent);
+        const userDisagrees = /不同意|反对|不对|错了|有问题|扯淡|不对吧/.test(userContent);
+
+        // Build rebuttals that reference article content
         const rebuttals = {
-          low: [
-            `我理解你的角度。不过如果我们换个视角来看，作者可能忽略了实际执行中的困难。你觉得呢？`,
-            `这个观点有道理。但我想补充一点：在不同的场景下，结论可能会不一样。你能举个例子吗？`,
-            `你说得对一部分。不过据我了解，有研究显示相反的结果。你怎么看这些不同的证据？`
-          ],
-          medium: [
-            `但你想过没？你说的这个方法在实际操作中可能并不那么顺利。很多人试过但坚持不下来。`,
-            `我不同意。如果按你说的做，短期内可能有效果，但长期来看反而会有副作用。你能反驳吗？`,
-            `作者确实提到了这点，但刻意回避了最关键的反面论据。你看出来了吗？`
-          ],
-          high: [
-            `这完全说不通！你说的这个逻辑有个致命的漏洞——如果每个人都这么想，结果会是什么？`,
-            `我坚决反对。这个观点已经被无数研究证伪了，你还在坚持，理由是什么？`,
-            `太天真了。现实世界根本不是这样运转的。我给你举个反例，看你还能怎么辩。`
-          ]
+          low: {
+            agree: [
+              `嗯，你同意"${kp.slice(0, 20)}..."这个观点，确实有说服力。但我想追问一下：${cp}，这个角度你考虑过吗？`,
+              `我理解你认同作者的意思。但${cp.slice(0, 25)}...这一点，会不会反而说明作者的观点太绝对了？`,
+              `你是对的，作者关于"${kp.slice(0, 18)}..."的分析很到位。不过${cp.slice(0, 20)}...这个反例你怎么解释？`
+            ],
+            neutral: [
+              `你这个观点有意思。但从${title}的另一个角度来看，作者说的"${kp.slice(0, 15)}..."也许有更深层的逻辑。你觉得呢？`,
+              `嗯，你这么说也有道理。不过我好奇的是——${cp}？这不是也很值得讨论吗？`,
+              `我们可以从两个方向来想。一是作者说的"${kp.slice(0, 20)}..."，二是${cp}。你更倾向哪个？`
+            ],
+            disagree: [
+              `所以你不同意"${kp.slice(0, 20)}..."的观点？有意思，能说说具体是哪一点让你觉得有问题吗？`,
+              `我注意到你持反对意见。${cp}，这刚好印证了你的立场。不过作者如果看到你的反驳，可能会说——`,
+              `你反对的角度很独特。但据我所知，这个问题其实还有第三种解法，你想听听吗？`
+            ]
+          },
+          medium: {
+            agree: [
+              `你又认同作者了？"${kp.slice(0, 18)}..."这观点表面看起来对，但${cp}——你仔细想想，是不是有漏洞？`,
+              `别急着站队。作者说"${kp.slice(0, 16)}..."没错，但${cp}！这个矛盾你怎么圆？`,
+              `哈，你被作者说服了对吧？但${cp}——你想想，这不就直接打脸了原文的核心论据吗？`
+            ],
+            neutral: [
+              `你这个回答太滑头了，回避了核心问题。我就问一句：${cp}，你同不同意这句话？`,
+              `说得模棱两可可不行。${title}的核心就两点——"${kp.slice(0, 15)}..."和"${cp.slice(0, 15)}..."，你到底站哪？`,
+              `你这是在和稀泥。别逃避，直接回答我：${cp}——你觉得这个反驳成立吗？`
+            ],
+            disagree: [
+              `哈，你反对作者！那正好，${cp}——这其实是作者最怕被问到的地方。你觉得呢？`,
+              `你不同意，很好。但我想说，作者之所以提出"${kp.slice(0, 18)}..."，也许是因为${cp.slice(0, 20)}...，这个逻辑链你考虑过吗？`,
+              `反对有理！但你有没有想过，${cp}——万一这恰恰说明作者的观点不全错呢？`
+            ]
+          },
+          high: {
+            agree: [
+              `你居然同意这个观点？？${cp}！睁大眼睛看看，这明明是自相矛盾的！`,
+              `又站作者那边是吧？那我问你：${cp}！这你怎么解释？别跟我说你没看到这一层。`,
+              `我真的无语了。"${kp.slice(0, 12)}..."这么明显的漏洞你看不出来吗？${cp}——这才是真相！`
+            ],
+            neutral: [
+              `别跟我打太极！说人话：你到底同不同意作者的结论？${cp}，这个问题你正面回答我！`,
+              `你这种模棱两可的回答最讨厌了。${title}就两个阵营，${cp}——你不敢选边吗？`,
+              `行了别拐弯抹角的。${cp}，我就问你这个观点你认不认？一句话！`
+            ],
+            disagree: [
+              `终于你反对了！但你的理由太弱了。${cp}——这才叫真正的反驳，你那叫情绪输出。`,
+              `你反对？很好，但你理由不够硬。作者说"${kp.slice(0, 15)}..."的时候，${cp}——这才是致命一击！`,
+              `反对没错，但你打偏了。真正的痛点是${cp}。你要是能反驳这个，我才服你。`
+            ]
+          }
         };
-        const list = rebuttals[level] || rebuttals.medium;
-        return list[Math.floor(Math.random() * list.length)];
+
+        const levelRebuttals = rebuttals[level] || rebuttals.medium;
+        let pool;
+        if (userAgrees) pool = levelRebuttals.agree;
+        else if (userDisagrees) pool = levelRebuttals.disagree;
+        else pool = levelRebuttals.neutral;
+
+        // Avoid repeating the same rebuttal
+        let attempts = 0;
+        let choice;
+        do {
+          choice = pool[Math.floor(Math.random() * pool.length)];
+          attempts++;
+        } while (this.usedRebuttals.includes(choice) && attempts < 5);
+
+        if (this.usedRebuttals.length > 10) this.usedRebuttals = [];
+        this.usedRebuttals.push(choice);
+        return choice;
       },
 
       completeDebate(masteryGain) {
@@ -1008,9 +1120,97 @@
       },
 
       changeAggressiveness(level) {
+        this.usedRebuttals = []; // Reset used rebuttals tracking on level change
         this.setState({
           currentDebate: { ...this.state.currentDebate, aggressiveness: level }
         });
+      },
+
+      // ===== LLM Integration =====
+      getLLMSystemPrompt(article, aggressiveness) {
+        const toneGuide = {
+          low: '语气温和、理性探讨、用"你觉得呢""也许可以换个角度"等表达，像是在和朋友轻松聊天',
+          medium: '语气有力但礼貌、带一点质疑、用"但你考虑过吗""我不太同意"等表达，像是在学术讨论中挑战对方',
+          high: '语气尖锐、充满挑衅、用"你认真的吗""这太天真了"等表达，像是在激烈辩论中针锋相对'
+        };
+        const tone = toneGuide[aggressiveness] || toneGuide.medium;
+        return `你是一个AI读书辩论助手，正在与用户辩论一篇收藏文章。请严格遵循以下要求：
+
+1. 身份：你是一个"杠精"书友，喜欢挑战别人的收藏文章，逼用户深度思考。
+2. 风格：${tone}
+3. 每次回复控制在50-150字之间，口语化，像真人聊天。
+4. 你的角色是用户的辩论对手，不要替用户回答问题，不要主动结束对话。
+5. 根据用户的发言内容（同意/反对/中立），给出有针对性的反驳或追问。
+6. 自然引用文章的观点${article ? '「' + (article.keyPoint || '') + '」' : ''}来展开讨论。
+7. 不要使用Markdown格式，不要加星号、列表等标记，纯文本回复。`;
+      },
+
+      async generateLLMResponse(messages, aggressiveness, article) {
+        const apiKey = this.state.settings.llmApiKey;
+        if (!apiKey) return null;
+
+        const systemPrompt = this.getLLMSystemPrompt(article, aggressiveness);
+
+        // Build conversation history for LLM
+        const chatMessages = [{ role: 'system', content: systemPrompt }];
+        messages.forEach(m => {
+          chatMessages.push({
+            role: m.role === 'ai' ? 'assistant' : 'user',
+            content: m.content
+          });
+        });
+
+        // Try HuggingFace Inference API
+        const modelUrl = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3';
+        
+        try {
+          const prompt = chatMessages.map(m => {
+            if (m.role === 'system') return `<s>[INST] ${m.content} [/INST]`;
+            if (m.role === 'assistant') return ` ${m.content}</s>`;
+            return ` [INST] ${m.content} [/INST]`;
+          }).join('') + ' ';
+
+          const response = await fetch(modelUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              inputs: prompt,
+              parameters: {
+                max_new_tokens: 250,
+                temperature: aggressiveness === 'high' ? 0.9 : aggressiveness === 'medium' ? 0.7 : 0.5,
+                top_p: 0.9,
+                return_full_text: false
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            // If model is loading, return a neutral message
+            if (response.status === 503) return null;
+            throw new Error(`API error ${response.status}: ${errText}`);
+          }
+
+          const data = await response.json();
+          let reply = '';
+          if (Array.isArray(data)) {
+            reply = data[0]?.generated_text || '';
+          } else if (data.generated_text) {
+            reply = data.generated_text;
+          }
+
+          // Clean up the response
+          reply = reply.replace(/<\/?s>/g, '').replace(/\[INST\].*?\[\/INST\]/gs, '').trim();
+          if (!reply || reply.length < 5) return null;
+
+          return reply;
+        } catch (e) {
+          console.warn('LLM API call failed:', e.message);
+          return null; // Fall back to preset
+        }
       },
 
       formatTime() {
@@ -1369,7 +1569,16 @@
           <div style="padding:12px 20px; border-bottom:1px solid var(--border-color); background:rgba(255,255,255,0.95);">
             <div style="font-size:0.85rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${article.title}</div>
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
-              <span style="font-size:0.75rem; color:var(--text-muted);">杠精模式</span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">
+                杠精模式
+                <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:2px 6px; border-radius:4px; font-size:0.65rem; font-weight:600;
+                  ${state.settings.aiMode === 'llm' && state.settings.llmApiKey
+                    ? 'background:rgba(54,207,201,0.12); color:var(--accent-secondary);'
+                    : 'background:var(--bg-input); color:var(--text-muted);'
+                  }">
+                  ${state.settings.aiMode === 'llm' && state.settings.llmApiKey ? '🤖 大模型' : '📋 预设'}
+                </span>
+              </span>
               <div class="chat-agg-toggle">${aggBtns}</div>
             </div>
           </div>
@@ -1422,10 +1631,36 @@
           </div>
 
           <div class="card" style="margin-bottom:16px;">
+            <div style="font-size:0.85rem; font-weight:600; margin-bottom:12px; color:var(--text-secondary);">AI 对话引擎</div>
+            <div class="segment-control" style="margin-bottom:12px;">
+              <button class="segment-item ${settings.aiMode === 'preset' ? 'active' : ''}" data-ai-mode="preset">预设话术</button>
+              <button class="segment-item ${settings.aiMode === 'llm' ? 'active' : ''}" data-ai-mode="llm">大模型（需Key）</button>
+            </div>
+            ${settings.aiMode === 'llm' ? `
+            <div style="margin-bottom:8px;">
+              <label class="form-label">HuggingFace API Key</label>
+              <input type="password" class="form-input" id="llm-api-key" value="${settings.llmApiKey || ''}" placeholder="输入你的 HF API Token" style="font-size:0.8rem;">
+              <div style="font-size:0.7rem; color:var(--text-muted); margin-top:6px; line-height:1.5;">
+                ⚠️ 密钥仅存储在浏览器内存中，刷新后需重新输入。
+                <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:var(--accent-primary);">免费获取 Token →</a>
+                <br>使用 HuggingFace 免费推理 API，无需绑定支付方式。
+              </div>
+            </div>
+            <div style="padding:10px 12px; background:rgba(255,122,69,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+              💡 开启后，辩论将调用真实大模型（Mistral 7B）生成回应。如 API 不可用，自动回退到预设话术。
+            </div>
+            ` : `
+            <div style="padding:10px 12px; background:rgba(54,207,201,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+              💡 当前使用内置预设话术。切换到「大模型模式」需输入 HuggingFace API Key（免费获取）。
+            </div>
+            `}
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
             <div class="toggle-row">
               <div>
-                <div class="toggle-label">碎片时间提醒</div>
-                <div class="toggle-desc">在设定时间主动推送辩论邀请</div>
+                <div class="toggle-label">锁屏通知</div>
+                <div class="toggle-desc">在锁屏界面每5秒推送辩论邀请</div>
               </div>
               <div class="toggle-switch ${settings.notificationsEnabled ? 'active' : ''}" data-setting="notificationsEnabled"></div>
             </div>
@@ -1435,13 +1670,6 @@
                 <div class="toggle-desc">允许使用麦克风进行语音辩论</div>
               </div>
               <div class="toggle-switch ${settings.voiceEnabled ? 'active' : ''}" data-setting="voiceEnabled"></div>
-            </div>
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-label">自动播放语音</div>
-                <div class="toggle-desc">AI消息自动播放语音（模拟）</div>
-              </div>
-              <div class="toggle-switch ${settings.voiceEnabled ? 'active' : ''}" data-setting="autoPlayVoice"></div>
             </div>
           </div>
 
@@ -1647,6 +1875,13 @@
         Store.setState({ settings: { ...Store.state.settings, defaultAggressiveness: agg } });
       }
 
+      // Settings - AI mode toggle
+      const aiModeBtn = e.target.closest('.segment-item[data-ai-mode]');
+      if (aiModeBtn) {
+        const mode = aiModeBtn.dataset.aiMode;
+        Store.setState({ settings: { ...Store.state.settings, aiMode: mode } });
+      }
+
       // Settings - toggle switch
       const toggle = e.target.closest('.toggle-switch[data-setting]');
       if (toggle) {
@@ -1656,12 +1891,10 @@
           const next = !current;
           Store.setState({ settings: { ...Store.state.settings, [setting]: next } });
           if (setting === 'notificationsEnabled') {
-            if (next) {
-              if (!appEntered) startLockscreenLoop();
-              else startAppToastLoop();
+            if (next && !appEntered) {
+              startLockscreenLoop();
             } else {
               stopLockscreenLoop();
-              stopAppToastLoop();
             }
           }
         }
@@ -1686,6 +1919,19 @@
             Store.sendUserMessage(content);
           }
         }
+      }
+      // API Key input - save on Enter
+      const apiKeyInput = document.getElementById('llm-api-key');
+      if (apiKeyInput && document.activeElement === apiKeyInput) {
+        // Auto-save on input
+      }
+    });
+
+    // API Key input change tracking
+    document.addEventListener('input', e => {
+      const apiKeyInput = e.target.closest('#llm-api-key');
+      if (apiKeyInput) {
+        Store.setState({ settings: { ...Store.state.settings, llmApiKey: apiKeyInput.value } });
       }
     });
 
@@ -1780,42 +2026,6 @@
       }
     });
 
-    // ===== App Toast (inside app only) =====
-    let appToastTimer = null;
-    let lastToastIndex = -1;
-
-    function triggerAppToast() {
-      if (!Store.state.settings.notificationsEnabled || !appEntered) return;
-      const eligible = Store.state.bookmarks.filter(b => b.mastery < 80);
-      if (!eligible.length) return;
-
-      let idx;
-      do { idx = Math.floor(Math.random() * eligible.length); }
-      while (eligible.length > 1 && idx === lastToastIndex);
-      lastToastIndex = idx;
-
-      const article = eligible[idx];
-      showToast(
-        `碎片时间！来辩论《${article.title}》？`,
-        '💬',
-        { text: '开始', onClick: () => Store.startDebate(article.id) },
-        'AI 杠精'
-      );
-    }
-
-    function startAppToastLoop() {
-      if (appToastTimer) clearInterval(appToastTimer);
-      appToastTimer = setInterval(() => {
-        if (appEntered && !Store.state.ui.toast.visible) {
-          triggerAppToast();
-        }
-      }, 15000); // Every 15s inside app
-    }
-
-    function stopAppToastLoop() {
-      if (appToastTimer) { clearInterval(appToastTimer); appToastTimer = null; }
-    }
-
     // ===== Initialization =====
     Store.subscribe(render);
     Store.resetData();
@@ -1833,9 +2043,6 @@
       addLockscreenNotification();
       startLockscreenLoop();
     }, 2000);
-
-    // App toast loop starts when entering app
-    setTimeout(startAppToastLoop, 8000);
   </script>
 </body>
 </html>
