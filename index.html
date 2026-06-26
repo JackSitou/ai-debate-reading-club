@@ -821,7 +821,8 @@
           passiveNotifyTime: 5,
           aiMode: 'preset',
           llmApiKey: '',
-          llmProvider: 'huggingface'
+          llmProvider: 'huggingface',
+          backendUrl: ''
         },
         ui: {
           toast: { visible: false, message: '', icon: '', action: null },
@@ -844,6 +845,8 @@
           url: data.url || '',
           topic: data.topic || '未分类',
           tags: data.tags || [],
+          keyPoint: data.keyPoint || `${data.title}提出了一些值得思考的观点`,
+          counterPoint: data.counterPoint || '但这个观点也有其局限性和反例',
           parsedAt: Date.now(),
           mastery: 0,
           debateCount: 0
@@ -979,7 +982,8 @@
           } else {
             // Try LLM first if enabled
             const article = this.state.bookmarks.find(b => b.id === debate.articleId);
-            const isLLMMode = this.state.settings.aiMode === 'llm' && this.state.settings.llmApiKey;
+            const isLLMMode = (this.state.settings.aiMode === 'llm' && this.state.settings.llmApiKey) ||
+                              (this.state.settings.aiMode === 'backend' && this.state.settings.backendUrl);
             if (isLLMMode) {
               const allMessages = [...this.state.currentDebate.messages, {
                 id: this.state.currentDebate.messages.length + 1,
@@ -1145,13 +1149,43 @@
 7. 不要使用Markdown格式，不要加星号、列表等标记，纯文本回复。`;
       },
 
+      async callBackendAPI(endpoint, body) {
+        const backendUrl = this.state.settings.backendUrl?.replace(/\/$/, '');
+        if (!backendUrl) return null;
+        try {
+          const res = await fetch(`${backendUrl}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error(`Backend ${res.status}`);
+          const data = await res.json();
+          return data.success ? data.content : null;
+        } catch (e) {
+          console.warn('Backend API call failed:', e.message);
+          return null;
+        }
+      },
+
       async generateLLMResponse(messages, aggressiveness, article) {
+        // Priority 1: Backend proxy mode
+        const backendUrl = this.state.settings.backendUrl;
+        if (backendUrl) {
+          const userContent = messages.length > 0 ? messages[messages.length - 1].content : '';
+          const reply = await this.callBackendAPI('/api/debate/reply', {
+            messages: messages.slice(0, -1).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
+            aggressiveness,
+            article: article ? { title: article.title, keyPoint: article.keyPoint, counterPoint: article.counterPoint } : null,
+            userContent
+          });
+          if (reply) return reply;
+        }
+
+        // Priority 2: Direct HuggingFace call
         const apiKey = this.state.settings.llmApiKey;
         if (!apiKey) return null;
 
         const systemPrompt = this.getLLMSystemPrompt(article, aggressiveness);
-
-        // Build conversation history for LLM
         const chatMessages = [{ role: 'system', content: systemPrompt }];
         messages.forEach(m => {
           chatMessages.push({
@@ -1160,9 +1194,7 @@
           });
         });
 
-        // Try HuggingFace Inference API
         const modelUrl = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3';
-        
         try {
           const prompt = chatMessages.map(m => {
             if (m.role === 'system') return `<s>[INST] ${m.content} [/INST]`;
@@ -1189,27 +1221,18 @@
 
           if (!response.ok) {
             const errText = await response.text().catch(() => '');
-            // If model is loading, return a neutral message
             if (response.status === 503) return null;
             throw new Error(`API error ${response.status}: ${errText}`);
           }
 
           const data = await response.json();
-          let reply = '';
-          if (Array.isArray(data)) {
-            reply = data[0]?.generated_text || '';
-          } else if (data.generated_text) {
-            reply = data.generated_text;
-          }
-
-          // Clean up the response
+          let reply = Array.isArray(data) ? (data[0]?.generated_text || '') : (data.generated_text || '');
           reply = reply.replace(/<\/?s>/g, '').replace(/\[INST\].*?\[\/INST\]/gs, '').trim();
           if (!reply || reply.length < 5) return null;
-
           return reply;
         } catch (e) {
           console.warn('LLM API call failed:', e.message);
-          return null; // Fall back to preset
+          return null;
         }
       },
 
@@ -1572,11 +1595,13 @@
               <span style="font-size:0.75rem; color:var(--text-muted);">
                 杠精模式
                 <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:2px 6px; border-radius:4px; font-size:0.65rem; font-weight:600;
-                  ${state.settings.aiMode === 'llm' && state.settings.llmApiKey
+                  ${state.settings.aiMode === 'backend' && state.settings.backendUrl
+                    ? 'background:rgba(146,84,222,0.12); color:var(--accent-tertiary);'
+                    : state.settings.aiMode === 'llm' && state.settings.llmApiKey
                     ? 'background:rgba(54,207,201,0.12); color:var(--accent-secondary);'
                     : 'background:var(--bg-input); color:var(--text-muted);'
                   }">
-                  ${state.settings.aiMode === 'llm' && state.settings.llmApiKey ? '🤖 大模型' : '📋 预设'}
+                  ${state.settings.aiMode === 'backend' && state.settings.backendUrl ? '☁️ 后端代理' : state.settings.aiMode === 'llm' && state.settings.llmApiKey ? '🤖 直连' : '📋 预设'}
                 </span>
               </span>
               <div class="chat-agg-toggle">${aggBtns}</div>
@@ -1634,7 +1659,8 @@
             <div style="font-size:0.85rem; font-weight:600; margin-bottom:12px; color:var(--text-secondary);">AI 对话引擎</div>
             <div class="segment-control" style="margin-bottom:12px;">
               <button class="segment-item ${settings.aiMode === 'preset' ? 'active' : ''}" data-ai-mode="preset">预设话术</button>
-              <button class="segment-item ${settings.aiMode === 'llm' ? 'active' : ''}" data-ai-mode="llm">大模型（需Key）</button>
+              <button class="segment-item ${settings.aiMode === 'llm' ? 'active' : ''}" data-ai-mode="llm">直连大模型</button>
+              <button class="segment-item ${settings.aiMode === 'backend' ? 'active' : ''}" data-ai-mode="backend">后端代理</button>
             </div>
             ${settings.aiMode === 'llm' ? `
             <div style="margin-bottom:8px;">
@@ -1643,15 +1669,26 @@
               <div style="font-size:0.7rem; color:var(--text-muted); margin-top:6px; line-height:1.5;">
                 ⚠️ 密钥仅存储在浏览器内存中，刷新后需重新输入。
                 <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:var(--accent-primary);">免费获取 Token →</a>
-                <br>使用 HuggingFace 免费推理 API，无需绑定支付方式。
               </div>
             </div>
             <div style="padding:10px 12px; background:rgba(255,122,69,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
-              💡 开启后，辩论将调用真实大模型（Mistral 7B）生成回应。如 API 不可用，自动回退到预设话术。
+              💡 浏览器直连 HuggingFace API 调用 Mistral 7B。Key 暴露在前端，仅用于演示。
+            </div>
+            ` : settings.aiMode === 'backend' ? `
+            <div style="margin-bottom:8px;">
+              <label class="form-label">后端服务地址</label>
+              <input type="url" class="form-input" id="backend-url" value="${settings.backendUrl || ''}" placeholder="https://your-backend.com" style="font-size:0.8rem;">
+              <div style="font-size:0.7rem; color:var(--text-muted); margin-top:6px; line-height:1.5;">
+                输入后端 API 地址，如 <code>http://localhost:3000</code> 或部署后的域名。
+                <a href="https://github.com/JackSitou/ai-debate-reading-club/tree/main/backend" target="_blank" style="color:var(--accent-primary);">查看后端部署指南 →</a>
+              </div>
+            </div>
+            <div style="padding:10px 12px; background:rgba(54,207,201,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+              💡 后端代理模式：API Key 存储在服务器端，更安全。支持 HuggingFace / OpenRouter / OpenAI 多提供商。
             </div>
             ` : `
-            <div style="padding:10px 12px; background:rgba(54,207,201,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
-              💡 当前使用内置预设话术。切换到「大模型模式」需输入 HuggingFace API Key（免费获取）。
+            <div style="padding:10px 12px; background:rgba(146,84,222,0.08); border-radius:12px; font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+              💡 当前使用内置预设话术。切换「直连大模型」需输入 API Key；切换「后端代理」需部署后端服务。
             </div>
             `}
           </div>
@@ -1787,32 +1824,55 @@
       if (e.target.closest('#btn-parse')) {
         const btn = document.getElementById('btn-parse');
         const title = document.getElementById('add-title').value.trim();
+        const content = document.getElementById('add-content').value.trim();
         if (!title) { showToast('请先输入文章标题', '⚠️', null, '提示'); return; }
 
         btn.innerHTML = '<span class="spinner"></span> AI 解析中...';
         btn.disabled = true;
         Store.setState({ ui: { ...Store.state.ui, parseLoading: true } });
 
-        setTimeout(() => {
-          const topicsPool = ['自我管理', '职场沟通', '心理学', '效率提升', '思维方式'];
-          const tagsPool = ['效率', '心理学', '职场', '沟通', '思维', '成长', '习惯', '方法论'];
-          const parsedTopic = topicsPool[Math.floor(Math.random() * topicsPool.length)];
-          const parsedTags = [tagsPool[Math.floor(Math.random() * tagsPool.length)], tagsPool[Math.floor(Math.random() * tagsPool.length)]];
+        const useBackend = Store.state.settings.aiMode === 'backend' && Store.state.settings.backendUrl;
 
-          document.getElementById('parsed-topic').textContent = parsedTopic;
-          document.getElementById('parsed-tags').innerHTML = parsedTags.map(t => `<span class="tag secondary">${t}</span>`).join('');
+        const finishParse = (topic, tags, keyPoint, counterPoint) => {
+          document.getElementById('parsed-topic').textContent = topic;
+          document.getElementById('parsed-tags').innerHTML = tags.map(t => `<span class="tag secondary">${t}</span>`).join('');
           document.getElementById('parse-result').style.display = 'block';
-
           btn.innerHTML = '<span>✅</span> 解析完成';
           btn.style.background = 'rgba(54,207,201,0.1)';
           btn.style.color = 'var(--accent-secondary)';
-
           const confirmBtn = document.getElementById('btn-add-confirm');
           confirmBtn.style.opacity = '1';
           confirmBtn.style.pointerEvents = 'all';
-          confirmBtn.dataset.parsedTopic = parsedTopic;
-          confirmBtn.dataset.parsedTags = JSON.stringify(parsedTags);
-        }, 1500);
+          confirmBtn.dataset.parsedTopic = topic;
+          confirmBtn.dataset.parsedTags = JSON.stringify(tags);
+          confirmBtn.dataset.parsedKeyPoint = keyPoint || '';
+          confirmBtn.dataset.parsedCounterPoint = counterPoint || '';
+        };
+
+        if (useBackend) {
+          Store.callBackendAPI('/api/knowledge/parse', { title, content })
+            .then(result => {
+              if (result) {
+                finishParse(result.topic, result.tags, result.keyPoint, result.counterPoint);
+              } else {
+                fallbackParse();
+              }
+            })
+            .catch(() => fallbackParse());
+        } else {
+          setTimeout(fallbackParse, 1500);
+        }
+
+        function fallbackParse() {
+          const topicsPool = ['自我管理', '职场沟通', '心理学', '效率提升', '思维方式'];
+          const tagsPool = ['效率', '心理学', '职场', '沟通', '思维', '成长', '习惯', '方法论'];
+          finishParse(
+            topicsPool[Math.floor(Math.random() * topicsPool.length)],
+            [tagsPool[Math.floor(Math.random() * tagsPool.length)], tagsPool[Math.floor(Math.random() * tagsPool.length)]],
+            `${title}提出了一些值得思考的观点`,
+            '但这个观点也有其局限性和反例'
+          );
+        }
       }
 
       // Add bookmark - confirm button
@@ -1823,10 +1883,12 @@
         const confirmBtn = document.getElementById('btn-add-confirm');
         const topic = confirmBtn.dataset.parsedTopic || '未分类';
         const tags = confirmBtn.dataset.parsedTags ? JSON.parse(confirmBtn.dataset.parsedTags) : [];
+        const keyPoint = confirmBtn.dataset.parsedKeyPoint || `${title}提出了一些值得思考的观点`;
+        const counterPoint = confirmBtn.dataset.parsedCounterPoint || '但这个观点也有其局限性和反例';
 
         if (!title) { showToast('请输入文章标题', '⚠️', null, '提示'); return; }
 
-        Store.addBookmark({ title, content, url, topic, tags });
+        Store.addBookmark({ title, content, url, topic, tags, keyPoint, counterPoint });
         showToast('收藏添加成功！', '✅', null, '成功');
         Store.setState({ currentView: 'bookmarks' });
       }
@@ -1932,6 +1994,10 @@
       const apiKeyInput = e.target.closest('#llm-api-key');
       if (apiKeyInput) {
         Store.setState({ settings: { ...Store.state.settings, llmApiKey: apiKeyInput.value } });
+      }
+      const backendUrlInput = e.target.closest('#backend-url');
+      if (backendUrlInput) {
+        Store.setState({ settings: { ...Store.state.settings, backendUrl: backendUrlInput.value } });
       }
     });
 
